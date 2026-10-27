@@ -46,5 +46,5 @@ description: 为任一 AI 编码 harness（claude-code、codebuddy、pi-agent、
 - `references/patterns.md` — 编排模式库、质量杠杆、反模式、安全守则
 - `references/research/*.md` — 各 harness 扩展机制调研原文（含来源 URL，生态信息过时以此复核）
 - `scripts/wf-runner.mjs` — Tier-2 便携运行时（零依赖，Node ≥18）
-- `tests/resume.test.mjs` — wf-runner resume 语义回归（`node tests/resume.test.mjs`，改 runner 必跑）
+- `tests/*.test.mjs` — 回归套件（parsers / resume / runtime / smoke，16 用例）；改 runner 必跑 `for f in tests/*.test.mjs; do node "$f"; done`
 - `assets/examples/review-codebase.workflow.mjs` — 可改写的完整示例

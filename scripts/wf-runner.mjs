@@ -8,6 +8,7 @@
 // Usage:
 //   node wf-runner.mjs <workflow.mjs> [--agents <agents.json>] [--args <json-or-string>]
 //                      [--name <run-name>] [--out <dir>] [--resume] [--budget-tokens <n>]
+//                      [--concurrency <n>]
 //
 // Output tree:  <out>/<run-name>/{run.json,events.jsonl,journal.jsonl,result.json,report.md?,
 //                                 prompts/,outputs/,errors/}
@@ -20,7 +21,6 @@ import crypto from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 
 const MAX_AGENTS = 1000;
-const CONCURRENCY = Math.max(1, Math.min(16, (os.cpus()?.length ?? 4) - 2));
 const SCHEMA_RETRIES = 2;
 
 // ---------------------------------------------------------------- CLI args
@@ -32,9 +32,35 @@ function flag(name, dflt) {
 const has = (name) => argv.includes('--' + name);
 const scriptPath = argv[0] && !argv[0].startsWith('--') ? argv[0] : null;
 if (!scriptPath) {
-  console.error('usage: node wf-runner.mjs <workflow.mjs> [--agents a.json] [--args JSON] [--name n] [--out dir] [--resume] [--budget-tokens n]');
+  console.error('usage: node wf-runner.mjs <workflow.mjs> [--agents a.json] [--args JSON] [--name n] [--out dir] [--resume] [--budget-tokens n] [--concurrency n]');
   process.exit(2);
 }
+
+// ---------------------------------------------------------------- concurrency
+function resolveConcurrency() {
+  const requested = Number(flag('concurrency'));
+  if (Number.isFinite(requested) && requested > 0) return Math.min(64, Math.floor(requested));
+  return Math.max(1, Math.min(16, (os.cpus()?.length ?? 4) - 2));
+}
+const CONCURRENCY = resolveConcurrency();
+
+// Counting semaphore: agent() holds a slot for the lifetime of its subprocess, so
+// parallel()/pipeline() fan-out can never exceed CONCURRENCY live children.
+function makeLimiter(max) {
+  let active = 0;
+  const queue = [];
+  return {
+    acquire() {
+      if (active < max) { active++; return Promise.resolve(); }
+      return new Promise((resolve) => queue.push(resolve));
+    },
+    release() {
+      active--;
+      if (queue.length && active < max) { active++; queue.shift()(); }
+    },
+  };
+}
+const agentSlots = makeLimiter(CONCURRENCY);
 
 // ---------------------------------------------------------------- source prep
 const source = fs.readFileSync(scriptPath, 'utf8');
@@ -323,18 +349,30 @@ function runProcess(command, promptText, cfg) {
     const child = spawn('sh', ['-c', command], {
       cwd: process.cwd(),
       env: cfg.inheritEnv === false ? { PATH: process.env.PATH, ...(cfg.env || {}) } : { ...process.env, ...(cfg.env || {}) },
+      // Own process group: a timeout must be able to kill grandchildren, not just the shell.
+      detached: true,
     });
-    let out = '', err = '';
-    const timer = setTimeout(() => {
-      child.kill('SIGKILL');
+    let out = '', err = '', timedOut = false, settled = false, timer = null;
+    const finish = (code) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      resolve({ code, out, err, timedOut });
+    };
+    timer = setTimeout(() => {
+      timedOut = true;
       err += '\n[wf-runner] timeout after ' + cfg.timeoutMs + 'ms';
+      try { process.kill(-child.pid, 'SIGKILL'); }
+      catch { try { child.kill('SIGKILL'); } catch { /* already gone */ } }
     }, cfg.timeoutMs);
+    // A child that exits before draining stdin raises EPIPE on the stream; unhandled,
+    // that becomes an uncaught 'error' event and takes down the whole run.
+    child.stdin.on('error', () => { /* child closed stdin early */ });
     child.stdout.on('data', (d) => { out += d; });
     child.stderr.on('data', (d) => { err += d; });
-    child.on('error', (e) => { clearTimeout(timer); resolve({ code: -1, out, err: err + String(e) }); });
-    child.on('close', (code) => { clearTimeout(timer); resolve({ code, out, err }); });
-    child.stdin.write(promptText);
-    child.stdin.end();
+    child.on('error', (e) => { err += String(e); finish(-1); });
+    child.on('close', (code) => finish(code));
+    try { child.stdin.write(promptText); child.stdin.end(); } catch { /* stream already closed */ }
   });
 }
 
@@ -373,10 +411,14 @@ async function agent(prompt, opts = {}) {
   log('spawn #' + idx + ' ' + label + ' (' + command.split(' ')[0] + ')');
   let result = null;
   for (let attempt = 0; attempt <= SCHEMA_RETRIES; attempt++) {
-    const { code, out, err } = await runProcess(command, fullPrompt, cfg);
+    await agentSlots.acquire();
+    let proc;
+    try { proc = await runProcess(command, fullPrompt, cfg); }
+    finally { agentSlots.release(); }
+    const { code, out, err, timedOut } = proc;
     fs.writeFileSync(path.join(runDir, 'outputs', tag + (attempt ? '-r' + attempt : '') + '.txt'), out);
     if (err) fs.writeFileSync(path.join(runDir, 'errors', tag + (attempt ? '-r' + attempt : '') + '.txt'), err);
-    if (code !== 0 && !out.trim()) {
+    if (timedOut || (code !== 0 && !out.trim())) {
       log('agent #' + idx + ' failed (exit ' + code + ')');
       result = null;
       break;

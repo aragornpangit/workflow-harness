@@ -52,7 +52,7 @@ return { audits: audits.filter(Boolean) }
   时间戳在脚本跑完后由外面盖章；随机性用索引/label 差异代替。
 - 脚本自身**无文件与 shell 能力**——枚举、读写、测试、diff 全部交给子代理或 Tier-2 运行时外层命令。
 - 脚本体是 async 上下文，直接 `await`；顶层 `return` 返回最终结果。
-- 并发上限 min(16, CPU-2)；单次 run 代理总数 ≤1000。
+- 并发上限默认 min(16, CPU-2)，Tier-2 可用 `--concurrency n` 覆盖（上限 64）；单次 run 代理总数 ≤1000。
 
 ## schema 契约
 
@@ -73,5 +73,6 @@ Tier-2 运行时细节：
 
 - 布局：运行目录 `<out>/<run-name>/`，含 `run.json`、`events.jsonl`、`journal.jsonl`、`result.json`、可选 `report.md`（脚本返回值含 `report` 字符串时写出）、`prompts/`、`outputs/`、`errors/`。
 - 续跑：`--resume` 回放 `journal.jsonl`（按调用序号索引，后写覆盖先写）。命中条件 = 调用序号 + prompt 哈希一致且上次非失败（null）；**前缀失效**：首个未命中的调用起，其后所有调用全部重跑（不混用新旧结果）；失败/校验不过的调用不缓存，续跑自动重试。语义回归：`node tests/resume.test.mjs`。
+- 并发与超时：`--concurrency n` 限制同时运行的子进程数（计数信号量，`parallel`/`pipeline` 扇出同样受控）；单个 agent 的 `timeoutMs` 到期后按**进程组** SIGKILL（连带孙进程），该 agent 记 `null`。
 - 适配：`agents.json` 配角色 → preset（`claude`/`codex`/`pi`/`codebuddy`/`opencode`/`hermes`）或自定义 `command`。模板见 `assets/agents.json`。CLI flag 随版本变化——**首次使用前用 `--help` 核对各 preset 的命令行**，不符就在 agents.json 覆写 `command`/`jsonCommand`。
 - 汇总：跑完读 `result.json` 与 `report.md`，不要凭对话记忆总结。
