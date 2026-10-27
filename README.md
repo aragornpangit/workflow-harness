@@ -1,5 +1,7 @@
 # workflow-harness
 
+中文 | [English](README.en.md)
+
 跨 harness 通用的**动态工作流（dynamic workflow）** agent skill：把大任务写成一段确定性 JavaScript 编排脚本，扇出隔离子代理执行，中间结果留在脚本变量里，只把最终答案带回会话。
 
 一套 DSL，六种 harness 通用：**claude-code、codebuddy、pi-agent、codex、opencode2、hermes**。
