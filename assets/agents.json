@@ -1,0 +1,7 @@
+{
+  "agents": {
+    "default": { "preset": "claude" },
+    "reviewer": { "preset": "codex" },
+    "coder": { "preset": "pi", "timeoutMs": 1800000 }
+  }
+}
