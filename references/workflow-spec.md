@@ -1,8 +1,16 @@
 # Workflow Spec — 跨 harness 共享 DSL 契约
 
 一份 workflow 脚本 = 一段普通 JavaScript，声明 `export const meta` 后顺序执行，调用固定几个全局原语派生子代理。
-该 DSL 是 claude-code 内置 Workflow、codebuddy 内置 Workflow、pi-dynamic-workflow 系扩展的**公共子集**，
-也是本 skill Tier-2 运行时（`scripts/wf-runner.mjs`）实现的接口。**按此契约写的脚本可在六个 harness 间直接迁移。**
+该 DSL 以 **pi-dynamic-workflow 系的签名**为基准，也是本 skill Tier-2 运行时（`scripts/wf-runner.mjs`）实现的接口。
+它**不是** claude-code / codebuddy 原生引擎的严格公共子集——三家签名有差异，迁移时按下面的兼容矩阵改写：
+
+| 原语 | 本契约（pi 系） | claude-code 原生 | codebuddy 原生 | Tier-2 运行时 |
+|---|---|---|---|---|
+| `phase` | `phase(title)` | `phase(title)` ✅ | `phase(name, body)` ⚠️ | 两种都接受 |
+| `parallel` | `parallel(thunks)` | `parallel(tasks)` ✅ | `parallel(items)` ⚠️ | thunk 与 promise 都接受 |
+| `pipeline` | `pipeline(items, ...stages)` | `pipeline(items, fn)` 单 stage | `pipeline(items)` | 多 stage |
+
+⚠️ = 需要改写：codebuddy 的 `phase` 要写成 `phase('X', () => { ... })`（Tier-2 两种写法都吃），`parallel` 要么传 thunk 要么传已启动的 promise。
 
 ## 脚本骨架
 
@@ -36,8 +44,8 @@ return { audits: audits.filter(Boolean) }
 |---|---|
 | `agent(prompt, opts?)` | 派生一个隔离子代理，返回其最终输出。被中止/出错时返回 `null`（不抛出）——用 `.filter(Boolean)` 过滤 |
 | `pipeline(items, ...stages)` | 每个 item 独立流过所有 stage，stage 间无屏障。stage 签名 `(prev, originalItem, index)`。某 item 的 stage 抛错则该 item 变 `null` |
-| `parallel(thunks)` | 并发执行 `() => agent(...)` 数组，**屏障**：等全部完成。thunk 抛错得 `null`，结果保持输入顺序 |
-| `phase(title)` | 开始新进度分组；title 须能在 `meta.phases` 找到 |
+| `parallel(items)` | 并发执行 `() => agent(...)` thunk 数组（也接受已启动的 promise），**屏障**：等全部完成。单项抛错得 `null`，结果保持输入顺序 |
+| `phase(title, body?)` | 开始新进度分组；title 建议与 `meta.phases` 对齐（Tier-2 不校验）。传 `body` 函数时同步执行并返回其结果（codebuddy 风格） |
 | `log(msg)` | 进度叙述行 |
 | `args` | 调用方传入的全局输入（原样字符串或 JSON） |
 | `budget` | `{ total, spent(), remaining() }` 令牌预算；`total` 为 `null` 表示未设上限 |
@@ -50,7 +58,9 @@ return { audits: audits.filter(Boolean) }
 - `meta` 必须是**纯对象字面量**且是第一个语句：无变量、无函数调用、无展开、无模板插值。
 - 禁用 `Date.now()` / `Math.random()` / `new Date()` / `import()` / `require()` / `eval`。
   时间戳在脚本跑完后由外面盖章；随机性用索引/label 差异代替。
-- 脚本自身**无文件与 shell 能力**——枚举、读写、测试、diff 全部交给子代理或 Tier-2 运行时外层命令。
+  Tier-2 的静态检查**只扫可执行代码**：注释与字符串/模板字面量里的这些词不会误杀（prompt 里写 "check Math.random()" 是合法的）。
+- 脚本自身**不提供**文件与 shell 原语——枚举、读写、测试、diff 全部交给子代理或 Tier-2 运行时外层命令。
+  原生引擎（claude-code / codebuddy）是编译期扫描 + 运行时拦截的确定性沙箱；**Tier-2 的 `vm` 只做确定性约束，不是安全边界**（已关闭 `codeGeneration` 字符串求值，但注入的宿主函数仍可能被构造器链利用）。workflow 脚本属于受信输入。
 - 脚本体是 async 上下文，直接 `await`；顶层 `return` 返回最终结果。
 - 并发上限默认 min(16, CPU-2)，Tier-2 可用 `--concurrency n` 覆盖（上限 64）；单次 run 代理总数 ≤1000。
 

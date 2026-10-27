@@ -59,6 +59,6 @@
 ## 可移植性守则（写 skill/脚本时遵守）
 
 1. SKILL.md 只用标准 frontmatter 子集：`name`（小写连字符 = 目录名）、`description`（≤500 字符，取各家最小上限）。`allowed-tools`/`context`/`hooks` 等私有字段在部分 harness 会被忽略——依赖它们的能力必须有纯指令降级路径。
-2. workflow 脚本严格按 workflow-spec.md 公共子集写，别用 `workflow()` 嵌套、`isolation`、`budget` 高级特性之外的引擎私有扩展。
+2. workflow 脚本严格按 workflow-spec.md 的契约写（以 pi 系签名为基准；claude-code / codebuddy 原生引擎按该文的兼容矩阵改写），别用 `workflow()` 嵌套、`isolation`、`budget` 之外的引擎私有扩展。
 3. 占位符（`${CLAUDE_SKILL_DIR}` 等）是私有实现——需要路径时让 agent 从 skill 实际安装位置推导。
 4. CLI flag 会漂移：preset 命令是起点不是契约。六个 preset 已于 2026-10-27 对本机真实 CLI 逐条核对（证据：`references/research/preset-flags/*.md`），CLI 升级后重跑核对并在 agents.json 覆写。

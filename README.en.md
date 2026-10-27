@@ -33,7 +33,7 @@ references/
   research/                     # research notes (harness extension mechanisms + preset flag evidence, with source URLs)
 scripts/wf-runner.mjs           # Tier-2 portable runtime (zero dependencies, Node ≥18)
 assets/                         # agents.json template + rewritable example workflow
-tests/                          # regression: parsers 6 + resume 5 + runtime 3 + smoke 2 — all green baseline
+tests/                          # regression: parsers 6 + resume 5 + runtime 3 + compat 6 + smoke 2 — all green baseline
 ```
 
 ## Quick start

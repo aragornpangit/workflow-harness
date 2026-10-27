@@ -25,12 +25,27 @@ const SCHEMA_RETRIES = 2;
 
 // ---------------------------------------------------------------- CLI args
 const argv = process.argv.slice(2);
+const VALUE_FLAGS = new Set(['--agents', '--args', '--name', '--out', '--budget-tokens', '--concurrency']);
 function flag(name, dflt) {
+  const inline = argv.find((a) => a.startsWith('--' + name + '='));
+  if (inline !== undefined) return inline.slice(name.length + 3);
   const i = argv.indexOf('--' + name);
   return i >= 0 && argv[i + 1] !== undefined ? argv[i + 1] : dflt;
 }
 const has = (name) => argv.includes('--' + name);
-const scriptPath = argv[0] && !argv[0].startsWith('--') ? argv[0] : null;
+// The script path is the first positional argument, wherever it sits among flags.
+function findScriptPath() {
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a.startsWith('--')) {
+      if (!a.includes('=') && VALUE_FLAGS.has(a)) i++;
+      continue;
+    }
+    return a;
+  }
+  return null;
+}
+const scriptPath = findScriptPath();
 if (!scriptPath) {
   console.error('usage: node wf-runner.mjs <workflow.mjs> [--agents a.json] [--args JSON] [--name n] [--out dir] [--resume] [--budget-tokens n] [--concurrency n]');
   process.exit(2);
@@ -64,9 +79,78 @@ const agentSlots = makeLimiter(CONCURRENCY);
 
 // ---------------------------------------------------------------- source prep
 const source = fs.readFileSync(scriptPath, 'utf8');
+
+// Blank out comments and string/template literal *text* (keeping ${...} expressions
+// as code) so the determinism scan only sees executable code. Without this, a prompt
+// that merely mentions "Date.now()" or "require(" would be rejected.
+// Known limitation: regex literals are not lexed; a regex containing a quote can
+// desync the scanner, which only ever causes a false negative, never a false positive.
+function codeOnly(src) {
+  const out = src.split('');
+  const blank = (from, to) => {
+    for (let k = from; k < to && k < out.length; k++) if (out[k] !== '\n') out[k] = ' ';
+  };
+  const n = src.length;
+  let i = 0;
+  while (i < n) {
+    const c = src[i];
+    if (c === '/' && src[i + 1] === '/') {
+      const start = i;
+      while (i < n && src[i] !== '\n') i++;
+      blank(start, i);
+      continue;
+    }
+    if (c === '/' && src[i + 1] === '*') {
+      const start = i;
+      i += 2;
+      while (i < n && !(src[i] === '*' && src[i + 1] === '/')) i++;
+      i = Math.min(n, i + 2);
+      blank(start, i);
+      continue;
+    }
+    if (c === '"' || c === "'") {
+      const start = i++;
+      while (i < n) {
+        if (src[i] === '\\') { i += 2; continue; }
+        if (src[i] === c) { i++; break; }
+        i++;
+      }
+      blank(start, i);
+      continue;
+    }
+    if (c === '\u0060') {
+      const start = i++;
+      blank(start, i);
+      let seg = i;
+      while (i < n) {
+        if (src[i] === '\\') { i += 2; continue; }
+        if (src[i] === '\u0060') { blank(seg, i + 1); i++; break; }
+        if (src[i] === '$' && src[i + 1] === '{') {
+          blank(seg, i + 2);
+          i += 2;
+          let depth = 1;
+          while (i < n && depth > 0) {
+            if (src[i] === '{') depth++;
+            else if (src[i] === '}') depth--;
+            i++;
+          }
+          seg = i;
+          continue;
+        }
+        i++;
+      }
+      blank(seg, i);
+      continue;
+    }
+    i++;
+  }
+  return out.join('');
+}
+
+const code = codeOnly(source);
 const FORBIDDEN = [/\bDate\.now\s*\(/, /\bMath\.random\s*\(/, /\bnew\s+Date\s*\(/, /\bimport\s*\(/, /\brequire\s*\(/, /\beval\s*\(/, /\bnew\s+Function\s*\(/];
 for (const re of FORBIDDEN) {
-  if (re.test(source)) {
+  if (re.test(code)) {
     console.error('wf-runner: nondeterministic construct in workflow script: ' + re);
     process.exit(2);
   }
@@ -118,9 +202,11 @@ function log(msg) {
   appendJsonl(path.join(runDir, 'events.jsonl'), { t: new Date().toISOString(), phase: currentPhase, event: 'log', msg: String(msg) });
   console.error('[wf:' + runName + ']' + (currentPhase ? ' [' + currentPhase + ']' : '') + ' ' + msg);
 }
-function phase(title) {
+function phase(title, body) {
   currentPhase = String(title);
   appendJsonl(path.join(runDir, 'events.jsonl'), { t: new Date().toISOString(), event: 'phase', title: currentPhase });
+  // codebuddy's native signature is phase(name, body); accept it so those scripts port over.
+  if (typeof body === 'function') return body();
 }
 let currentPhase = null;
 
@@ -444,11 +530,12 @@ async function agent(prompt, opts = {}) {
 }
 
 // ---------------------------------------------------------------- combinators
-function parallel(thunks) {
-  return Promise.all(thunks.map((thunk) => Promise.resolve().then(thunk).catch((e) => {
-    log('parallel thunk error: ' + e);
-    return null;
-  })));
+function parallel(items) {
+  // Accept both () => agent(...) thunks (pi/claude shape) and already-started
+  // promises (codebuddy's parallel(items) shape).
+  return Promise.all((items || []).map((item) => Promise.resolve()
+    .then(() => (typeof item === 'function' ? item() : item))
+    .catch((e) => { log('parallel item error: ' + e); return null; })));
 }
 async function pipeline(items, ...stages) {
   return Promise.all(items.map((item, index) => (async () => {
@@ -476,16 +563,21 @@ if (args !== undefined) {
 }
 
 // ---------------------------------------------------------------- run
+// Only the DSL primitives cross the boundary; builtins come from the context's own
+// realm (injecting host JSON/Math/Error leaked host constructors into the script).
 const sandboxGlobals = {
   meta, agent, parallel, pipeline, phase, log, args, budget,
   console: { log: (...a) => log(a.join(' ')), error: (...a) => log(a.join(' ')) },
-  JSON, Math, Array, Object, String, Number, Boolean, Promise, Map, Set, Symbol, RegExp, Error,
 };
+// NOTE: vm is a determinism aid, not a security boundary — the injected host functions
+// still expose host constructors. Disabling string code generation blocks the cheapest
+// escape (Function/eval created inside the context). Workflow scripts are trusted input.
+const context = vm.createContext(sandboxGlobals, { codeGeneration: { strings: false, wasm: false } });
 const wrapped = '(async () => {\n' + body + '\n})()';
 const started = Date.now();
 let result;
 try {
-  result = await vm.runInNewContext(wrapped, sandboxGlobals, { filename: path.resolve(scriptPath) });
+  result = await vm.runInContext(wrapped, context, { filename: path.resolve(scriptPath) });
 } catch (e) {
   log('workflow threw: ' + (e && e.stack ? e.stack : e));
   process.exitCode = 1;

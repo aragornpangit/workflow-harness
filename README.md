@@ -33,7 +33,7 @@ references/
   research/                     # 调研原文（各 harness 扩展机制 + preset flags 实测证据，含来源 URL）
 scripts/wf-runner.mjs           # Tier-2 便携运行时（零依赖，Node ≥18）
 assets/                         # agents.json 模板 + 可改写示例 workflow
-tests/                          # 回归：parsers 6 + resume 5 + runtime 3 + smoke 2，全绿基准
+tests/                          # 回归：parsers 6 + resume 5 + runtime 3 + compat 6 + smoke 2，全绿基准
 ```
 
 ## 快速上手
