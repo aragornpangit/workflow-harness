@@ -1,7 +1,7 @@
 # CodeBuddy Code（CLI）扩展机制调研
 
 > 调研人：res-codebuddy ｜ 日期：2026-10-26
-> 主要来源：本机内置文档 `/home/<user>/.nvm/versions/node/v24.16.0/lib/node_modules/@tencent-ai/codebuddy-code/dist/web-ui/docs/cn/cli/*.md`（亦有 `en/cli/` 英文版）
+> 主要来源：本机内置文档 `~/.nvm/versions/node/v24.16.0/lib/node_modules/@tencent-ai/codebuddy-code/dist/web-ui/docs/cn/cli/*.md`（亦有 `en/cli/` 英文版）
 > 佐证来源：cnb.cool 仓库文档地图、agentskills.io 开放标准、opencode.ai / Codex 官方文档
 
 ---
@@ -188,7 +188,7 @@ CodeBuddy Code 的扩展体系与 Claude Code 高度同构（`.codebuddy/` ≈ `
 
 ## 10. 来源清单
 
-**本机内置文档**（`/home/<user>/.nvm/versions/node/v24.16.0/lib/node_modules/@tencent-ai/codebuddy-code/dist/web-ui/docs/`）：
+**本机内置文档**（`~/.nvm/versions/node/v24.16.0/lib/node_modules/@tencent-ai/codebuddy-code/dist/web-ui/docs/`）：
 - `cn/cli/skills.md`、`cn/cli/slash-commands.md`、`cn/cli/sub-agents.md`、`cn/cli/workflows.md`、`cn/cli/workflow-stdio-protocol.md`、`cn/cli/hooks.md`、`cn/cli/hooks-guide.md`、`cn/cli/mcp.md`、`cn/cli/mcp-apps.md`、`cn/cli/plugins.md`、`cn/cli/plugins-reference.md`、`cn/cli/plugin-marketplaces.md`、`cn/cli/codebuddy-dir.md`、`cn/cli/tools-reference.md`
 
 **线上**：

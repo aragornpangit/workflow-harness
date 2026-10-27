@@ -1,7 +1,7 @@
 # codex (OpenAI Codex CLI) — preset flags 核对
 
 - 核对日期: 2026-10-27
-- 可执行文件: /home/<user>/.nvm/versions/node/v24.16.0/bin/codex（npm 包 @openai/codex，原生二进制在 @openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex）
+- 可执行文件: ~/.nvm/versions/node/v24.16.0/bin/codex（npm 包 @openai/codex，原生二进制在 @openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex）
 - 版本: codex-cli 0.163.0（codex --version）
 - 核对方式: 仅读 codex --help / codex exec --help + 二进制内 serde 事件名字符串 + 公开文档佐证；未发真实 prompt、未消耗 token
 

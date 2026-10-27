@@ -1,7 +1,7 @@
 # preset-flags: claude (Anthropic Claude Code CLI)
 
 - 核对日期: 2026-10-27
-- 可执行文件: `/home/<user>/.claude/downloads/claude-2.1.165-linux-x64`（不在 PATH；`command -v claude` 无结果）
+- 可执行文件: `~/.claude/downloads/claude-2.1.165-linux-x64`（不在 PATH；`command -v claude` 无结果）
   - 版本: `2.1.165 (Claude Code)`（`--version` / `-v`）
   - 备注: `~/.claude/downloads/` 另有未解压的 `claude-2.1.300-linux-x64.zst`
 - 预期用法: `claude -p --output-format json` — **核对通过**，flag 均真实存在

@@ -1,7 +1,7 @@
 # opencode — wf-runner CLI 适配核对
 
 - 目标 CLI：opencode（sst/opencode）
-- 可执行文件：`/home/<user>/.opencode/bin/opencode`（`command -v opencode` 命中）
+- 可执行文件：`~/.opencode/bin/opencode`（`command -v opencode` 命中）
 - 版本：`opencode v2.1.3`（`opencode --version`）
 - 核对方式：只读 `opencode --help` / `opencode run --help` + v2.1.3 tag 源码（packages/cli/src/commands/commands.ts、src/run/run.ts、src/run/noninteractive.ts），未发真实 prompt、未消耗 token
 - 预期用法：`opencode run --format json` —— **基本吻合**（flag 存在且名字一致），但输出形态需注意（见 b）

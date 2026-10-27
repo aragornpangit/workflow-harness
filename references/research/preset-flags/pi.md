@@ -1,6 +1,6 @@
 # pi (earendil-works Pi coding agent) — preset flag 核对
 
-- 可执行文件: `/home/<user>/.nvm/versions/node/v24.16.0/bin/pi`
+- 可执行文件: `~/.nvm/versions/node/v24.16.0/bin/pi`
   (symlink → `~/.nvm/versions/node/v24.16.0/lib/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js`)
 - 版本: `1.4.0`（`pi --version`）
 - 核对日期: 2026-10-27。证据来自 `pi --help` 与安装包 bundle 源码（`dist/bundle/chunks/chunk-MM3LKT73.js`）。

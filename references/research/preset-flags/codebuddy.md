@@ -1,7 +1,7 @@
 # preset-flags: codebuddy（腾讯 CodeBuddy Code）
 
 - 核对日期：2026-10-27
-- 可执行文件：`/home/<user>/.local/bin/codebuddy`（`command -v codebuddy`；别名 `cbc`）
+- 可执行文件：`~/.local/bin/codebuddy`（`command -v codebuddy`；别名 `cbc`）
 - 版本：`codebuddy --version` → `2.177.0`
 - 证据来源：`codebuddy --help`（2.177.0 实测）+ 内置文档 headless.md / sdk-typescript.md（`<node_modules>/@tencent-ai/codebuddy-code/dist/web-ui/docs/`）
 
