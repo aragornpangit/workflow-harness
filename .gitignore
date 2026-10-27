@@ -1,2 +1,4 @@
 dist/
 .wf-runs/
+.env
+.env.*
